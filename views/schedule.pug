@@ -18,11 +18,11 @@ block content
           - var availabilityLabels = ['欠', '？', '出'];
           td
             if user.isSelf
-              button(class="availability-toggle-button"
-                data-schedule-id="#{schedule.scheduleId}"
-                data-user-id="#{user.userId}"
-                data-candidate-id="#{candidate.candidateId}"
-                data-availability="#{availability}") #{availabilityLabels[availability]}
+              button(
+                data-schedule-id=schedule.scheduleId
+                data-user-id=user.userId
+                data-candidate-id=candidate.candidateId
+                data-availability=availability).availability-toggle-button #{availabilityLabels[availability]}
             else
               p #{availabilityLabels[availability]}
     tr
@@ -30,10 +30,10 @@ block content
       each user in users
         if user.isSelf
           td
-            p(id="self-comment") #{commentMap.get(user.userId)}
-            button(id="self-comment-button"
-              data-schedule-id="#{schedule.scheduleId}"
-              data-user-id="#{user.userId}") 編集
+            p#self-comment #{commentMap.get(user.userId)}
+            button(
+              data-schedule-id=schedule.scheduleId
+              data-user-id=user.userId)#self-comment-button 編集
         else
           td
             p #{commentMap.get(user.userId)}
