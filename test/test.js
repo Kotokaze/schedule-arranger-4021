@@ -8,6 +8,7 @@ const Schedule = require('../models/schedule');
 const Candidate = require('../models/candidate');
 const Availability = require('../models/availability');
 const Comment = require('../models/comment');
+const deleteScheduleAggregate = require('../routes/schedules').deleteScheduleAggregate;
 
 describe('/login', () => {
   beforeAll(() => {
@@ -19,7 +20,7 @@ describe('/login', () => {
     passportStub.logout();
     passportStub.uninstall(app);
   });
-  
+
   test('ログインのためのリンクが含まれる', () => {
     return request(app)
       .get('/login')
@@ -27,7 +28,7 @@ describe('/login', () => {
       .expect(/<a href="\/auth\/github"/)
       .expect(200);
   });
-  
+
   test('ログイン時はユーザー名が表示される', () => {
     return request(app)
       .get('/login')
@@ -94,7 +95,7 @@ describe('/schedules/:scheduleId/users/:userId/candidates/:candidateId', () => {
     passportStub.logout();
     passportStub.uninstall(app);
   });
-  
+
   test('出欠が更新できる', (done) => {
     User.upsert({ userId: 0, username: 'testuser' }).then(() => {
       request(app)
@@ -170,30 +171,58 @@ describe('/schedules/:scheduleId/users/:userId/comments', () => {
   });
 });
 
-function deleteScheduleAggregate(scheduleId, done, err) {
-  const promiseCommentDestroy = Comment.findAll({
-    where: { scheduleId: scheduleId }
-  }).then((comments) => {
-    return Promise.all(comments.map((c) => { return c.destroy(); }));
+describe('/schedules/:scheduleId?edit=1', () => {
+
+  beforeAll(() => {
+
+    passportStub.install(app);
+    passportStub.login({ id: 0, username: 'testuser' });
   });
 
-  Availability.findAll({
-    where: { scheduleId: scheduleId }
-  }).then((availabilities) => {
-    const promises = availabilities.map((a) => { return a.destroy(); });
-    return Promise.all(promises);
-  }).then(() => {
-    return Candidate.findAll({
-      where: { scheduleId: scheduleId }
-    });
-  }).then((candidates) => {
-    const promises = candidates.map((c) => { return c.destroy(); });
-    promises.push(promiseCommentDestroy);
-    return Promise.all(promises);
-  }).then(() => {
-    return Schedule.findByPk(scheduleId).then((s) => { return s.destroy(); });
-  }).then(() => {
-    if (err) return done(err);
-    done();
+  afterAll(() => {
+
+    passportStub.logout();
+    passportStub.uninstall(app);
   });
-}
+
+  test('予定が更新でき、候補が追加できる', (done) => {
+
+    User.upsert({ userId: 0, username: 'testuser' }).then(() => {
+
+      request(app)
+        .post('/schedules')
+        .send({ scheduleName: 'テスト更新予定1', memo: 'テスト更新メモ1', candidates: 'テスト更新候補1' })
+        .end((err, res) => {
+
+          const createdSchedulePath = res.headers.location;
+          const scheduleId = createdSchedulePath.split('/schedules/')[1];
+
+          // 更新がされることをテスト
+          request(app)
+            .post(`/schedules/${scheduleId}?edit=1`)
+            .send({ scheduleName: 'テスト更新予定2', memo: 'テスト更新メモ2', candidates: 'テスト更新候補2' })
+            .end((err, res) => {
+
+              Schedule.findByPk(scheduleId).then((s) => {
+
+                assert.strictEqual(s.scheduleName, 'テスト更新予定2');
+                assert.strictEqual(s.memo, 'テスト更新メモ2');
+              });
+
+              Candidate.findAll(
+                {
+                  where: { scheduleId: scheduleId },
+                  order: [['candidateId', 'ASC']]
+                }
+              ).then((candidates) => {
+
+                assert.strictEqual(candidates.length, 2);
+                assert.strictEqual(candidates[0].candidateName, 'テスト更新候補1');
+                assert.strictEqual(candidates[1].candidateName, 'テスト更新候補2');
+                deleteScheduleAggregate(scheduleId, done, err);
+              });
+            });
+        });
+    });
+  });
+});
